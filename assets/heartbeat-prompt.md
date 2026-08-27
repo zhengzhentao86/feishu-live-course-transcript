@@ -1,0 +1,1 @@
+继续会话 `{{SESSION_STATE}}`。只用 lark-cli。先运行 `collect_incremental.rb` 和 `route_model.rb`：exit 用 `commit_empty_poll.rb` 提交本地游标后静默；wait 不推进游标，等图片对应字幕；stop 保留现场停写；rebuild 禁止尾部追加，转课程级重建；run 只把 compact context 交给指定模型。同段多图必须组成一个 image_group，正文只写一次。默认每 120 秒检查，2—6 分钟一个 batch，一次写入、一次尾部回读。换会用 `switch_meeting.rb` 保持统一课程时钟；仅确认整门课结束才读一次正式妙记、生成主题分章成品文档并完成首中尾真实视觉验收。completed 立即退出。

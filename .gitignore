@@ -1,0 +1,23 @@
+.DS_Store
+*.log
+*.tmp
+*.swp
+.env
+.env.*
+
+# 本机私有评测集与运行产物不进入公开仓库
+evals/
+workspace/
+workspaces/
+live-course-sessions/
+validation-previews/
+final-publish-chunks/
+**/state.json
+**/backups/
+
+# 本机认证与工具配置
+.lark/
+.config/
+credentials*
+auth*
+token*
