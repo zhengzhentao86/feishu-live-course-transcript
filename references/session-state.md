@@ -73,7 +73,7 @@
   "assignments": [
     {"kind":"image","message_id":"om_x","transcript_ids":["t1"],"speaker":"讲师姓名","slide_title":"标题1","chapter_title":"主题｜具体内容","paragraphs":["只与该页对应的正文含[[重点]]"]},
     {"kind":"image_group","message_ids":["om_y","om_z"],"transcript_ids":["t2"],"speaker":"讲师姓名","slide_titles":["标题2","标题3"],"alignment_mode":"shared_explanation","alignment_reason":"讲师用同一段总括讲解同时说明这两张总览页，无法可靠拆句","paragraphs":["共享正文只出现一次"]},
-    {"kind":"text","transcript_ids":["t2"],"speaker":"讲师姓名","paragraphs":["正文"]}
+    {"kind":"text","transcript_ids":["t3"],"speaker":"讲师姓名","paragraphs":["正文"]}
   ],
   "ignored_transcripts": [{"transcript_ids":["noise_1"],"reason":"设备调试"}]
 }

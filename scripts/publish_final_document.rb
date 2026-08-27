@@ -107,7 +107,9 @@ current_chunk = []
 current_images = 0
 current_blocks = 0
 units.each do |unit|
-  unit_images = unit.count { |node| node.name == "img" }
+  unit_images = unit.sum do |node|
+    (node.name == "img" ? 1 : 0) + REXML::XPath.match(node, "descendant::img").length
+  end
   unit_blocks = unit.length
   if !current_chunk.empty? && (current_images + unit_images > options[:max_images] || current_blocks + unit_blocks > options[:max_blocks])
     chunks << current_chunk

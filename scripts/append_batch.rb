@@ -380,7 +380,7 @@ if options[:recover_existing]
     end_block_id: "-1"
   )
   revision = verified.fetch("revision_id")
-  abort "Recovery revision did not advance exactly once" unless revision.to_i == recorded_revision.to_i + 1
+  abort "Recovery revision did not advance" unless revision.to_i > recorded_revision.to_i
 else
   revision = append_xml(doc_token, batch_xml, recorded_revision, session_dir)
   sleep 1
@@ -415,11 +415,14 @@ entries.each do |entry|
   verified_images = []
   if %w[image image_group].include?(kind)
     entry_images(entry).each do |image|
-      image_name = "#{image.fetch('position').to_i.to_s.rjust(4, '0')}-#{image.fetch('message_id')}-#{File.basename(image.fetch('local_path'))}"
-      matches = REXML::XPath.match(xml, "//img").select { |node| node.attributes["name"].to_s == image_name }
-      abort "Image verification failed for #{image_name}" unless matches.length == 1
+      requested_name = "#{image.fetch('position').to_i.to_s.rjust(4, '0')}-#{image.fetch('message_id')}-#{File.basename(image.fetch('local_path'))}"
+      uploaded_basename = File.basename(image.fetch("local_path"))
+      accepted_names = [requested_name, uploaded_basename].uniq
+      matches = REXML::XPath.match(xml, "//img").select { |node| accepted_names.include?(node.attributes["name"].to_s) }
+      abort "Image verification failed for #{requested_name}" unless matches.length == 1
       resource_ok = %w[token src url href].any? { |attribute| !matches.first.attributes[attribute].to_s.empty? }
-      abort "Image resource missing for #{image_name}" unless resource_ok
+      abort "Image resource missing for #{requested_name}" unless resource_ok
+      image_name = matches.first.attributes["name"].to_s
       new_anchor_id = matches.first.attributes["id"].to_s
       verified_new_images += 1
       verified_images << [image, image_name]
@@ -507,6 +510,32 @@ entries.each do |entry|
       "body_block_ids" => body_nodes.map { |nodes| nodes.last.attributes["id"].to_s },
       "body_block_id" => body_nodes.last.last.attributes["id"].to_s
     }
+  end
+end
+
+if options[:recover_existing]
+  root = xml.root
+  top_level = root.elements.to_a
+  abort "Recovery range does not start at the recorded tail anchor" unless top_level.first&.attributes&.[]("id").to_s == anchor_id
+  tail_blocks = top_level.drop(1)
+  expected_paragraphs = entries.flat_map do |entry|
+    [meeting_stamp(entry), *clean_paragraphs(entry).map { |body| body.gsub(/\[\[|\]\]/, "") }]
+  end
+  actual_paragraphs = tail_blocks.flat_map { |block| REXML::XPath.match(block, ".//p") }.map { |node| plain_text(node) }
+  actual_headings = tail_blocks.flat_map { |block| REXML::XPath.match(block, ".//h2") }.map { |node| plain_text(node) }
+  expected_headings = opened_chapters.map { |chapter| chapter.fetch("title") }
+  actual_images = tail_blocks.flat_map { |block| REXML::XPath.match(block, ".//img") }
+  expected_image_count = entries.sum { |entry| entry_images(entry).length }
+  abort "Recovery transcript structure mismatch" unless actual_paragraphs == expected_paragraphs
+  abort "Recovery chapter structure mismatch" unless actual_headings == expected_headings
+  abort "Recovery image count mismatch" unless actual_images.length == expected_image_count
+  last_image_id = actual_images.last&.attributes&.[]("id").to_s
+  if expected_image_count.positive?
+    last_image_top = actual_images.last
+    last_image_top = last_image_top.parent while last_image_top.parent != root
+    abort "Recovery batch is not the exact document suffix" unless last_image_id == new_anchor_id && tail_blocks.last == last_image_top
+  else
+    abort "Recovery batch is not the exact document suffix" unless tail_blocks.last&.attributes&.[]("id").to_s == new_anchor_id
   end
 end
 

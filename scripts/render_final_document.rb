@@ -79,13 +79,31 @@ def resolve_slide_file(slide, session_dir)
   candidates.find { |file_path| image_name.end_with?(File.basename(file_path)) }
 end
 
+def grid_widths(count)
+  case count
+  when 1 then [["1.0"], 780]
+  when 2 then [["0.5", "0.5"], 360]
+  when 3 then [["0.333333", "0.333333", "0.333334"], 240]
+  when 4 then [["0.25", "0.25", "0.25", "0.25"], 180]
+  else abort "Grid row must contain 1-4 images"
+  end
+end
+
+def final_image_xml(slide, file_path, session_dir, group, message_id, page_number, width)
+  relative = Pathname.new(file_path).relative_path_from(Pathname.new(session_dir)).to_s
+  title = slide["slide_title"].to_s.empty? ? "标题待识别" : slide["slide_title"].to_s
+  caption = format("正式 PPT 第 %03d 页｜课程约 %s｜%s", page_number, group["course_time"], title)
+  name = slide["image_name"].to_s.empty? ? format("%04d-%s-%s", slide["position"].to_i, message_id, File.basename(file_path)) : slide["image_name"]
+  %Q(<img path="@./#{CGI.escapeHTML(relative)}" width="#{width}" name="#{CGI.escapeHTML(name)}" caption="#{CGI.escapeHTML(caption)}"/>)
+end
+
 unavailable = Array(state["unavailable_image_records"])
 lines = [
   "<h1>阅读说明</h1>",
   "<ul>",
   "<li>逐字稿采用忠实精修：只删口水词、立即自我纠正、逐字重复和无关课堂杂项，保留案例、数字、条件、因果、问答与原讲解顺序，不压缩成摘要。</li>",
   "<li>时间使用整门课程的连续相对时间；课程发生续场换会时不重新从 00:00:00 开始。</li>",
-  "<li>同一段讲解对应多张连续 PPT 时，正文只出现一次，图片按群内发送顺序紧跟其后。</li>",
+  "<li>连续多张 PPT 优先按语义拆成一段相关讲解配一张图；只有共享讲解无法可靠拆分时，正文保留一次并将图片按发送顺序并排。</li>",
   "<li>蓝色加粗用于标记关键术语、方法、结论与步骤；没有新 PPT 的讲解继续以纯文本时间条目记录。</li>"
 ]
 unless unavailable.empty?
@@ -101,16 +119,26 @@ chapters.each do |chapter|
     group = group_map.fetch(group_id)
     lines << %Q(<p><b>#{CGI.escapeHTML(group_stamp(group))}</b></p>)
     Array(group["paragraphs"]).each { |paragraph| lines << %Q(<p>#{rich_text(paragraph)}</p>) }
-    Array(group["image_message_ids"]).each do |message_id|
+    image_tags = Array(group["image_message_ids"]).map do |message_id|
       slide = slide_by_message.fetch(message_id)
       file_path = resolve_slide_file(slide, session_dir)
       abort "Local image missing for #{message_id}" unless file_path && File.size(file_path).positive?
-      relative = Pathname.new(file_path).relative_path_from(Pathname.new(session_dir)).to_s
       page_number += 1
-      title = slide["slide_title"].to_s.empty? ? "标题待识别" : slide["slide_title"].to_s
-      caption = format("正式 PPT 第 %03d 页｜课程约 %s｜%s", page_number, group["course_time"], title)
-      name = slide["image_name"].to_s.empty? ? format("%04d-%s-%s", slide["position"].to_i, message_id, File.basename(file_path)) : slide["image_name"]
-      lines << %Q(<img path="@./#{CGI.escapeHTML(relative)}" width="780" name="#{CGI.escapeHTML(name)}" caption="#{CGI.escapeHTML(caption)}"/>)
+      [slide, file_path, message_id, page_number]
+    end
+    if image_tags.length <= 1
+      image_tags.each do |slide, file_path, message_id, number|
+        lines << final_image_xml(slide, file_path, session_dir, group, message_id, number, 780)
+      end
+    else
+      image_tags.each_slice(4) do |row|
+        ratios, width = grid_widths(row.length)
+        columns = row.each_with_index.map do |(slide, file_path, message_id, number), index|
+          tag = final_image_xml(slide, file_path, session_dir, group, message_id, number, width)
+          %Q(<column width-ratio="#{ratios[index]}">#{tag}</column>)
+        end
+        lines << "<grid>#{columns.join}</grid>"
+      end
     end
   end
 end
