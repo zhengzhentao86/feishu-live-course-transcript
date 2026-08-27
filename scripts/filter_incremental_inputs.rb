@@ -136,7 +136,7 @@ end.compact
 last_scanned_message = messages.last
 message_backlog_remaining = message_candidates.length - messages.length
 safe_message_scan_end = if message_backlog_remaining.positive?
-  last_scanned_message ? last_scanned_message["created_at"] : last_message_scan_end
+  [last_message_scan_end, last_scanned_message&.dig("created_at")].compact.max
 else
   scan_end
 end
