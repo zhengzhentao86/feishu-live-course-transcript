@@ -51,7 +51,12 @@ meeting_session = Array(state["meeting_sessions"]).find { |item| item["meeting_i
 event_identity = meeting_session&.dig("event_identity") || state["event_identity"] || "user"
 abort "Session has no chat_id" if chat_id.empty?
 abort "Session has no current meeting_id" if meeting_id.empty?
-message_start = state["last_message_scan_end"] || state["last_message_time"] || state["meeting_start"]
+message_cursor_candidates = [state["last_message_scan_end"], state["last_message_time"]].compact.map do |value|
+  Time.parse(value.to_s)
+rescue ArgumentError
+  nil
+end.compact
+message_start = message_cursor_candidates.min&.iso8601 || state["meeting_start"]
 transcript_start = state["last_transcript_end_time"] || state["meeting_start"]
 abort "Session has no message start cursor" if message_start.to_s.empty?
 abort "Session has no transcript start cursor" if transcript_start.to_s.empty? && state["meeting_event_page_token"].to_s.empty?

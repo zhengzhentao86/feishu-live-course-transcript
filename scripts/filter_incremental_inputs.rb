@@ -91,7 +91,7 @@ message_candidates = Array(messages_data["messages"]).map do |message|
   position = message["message_position"].to_i
   created_at = parse_time(message["create_time"], meeting_start: meeting_start)
   next if position <= last_position || created_at.nil?
-  next if last_message_scan_end && created_at < last_message_scan_end
+  next if last_position <= 0 && last_message_scan_end && created_at < last_message_scan_end
   { "raw" => message, "position" => position, "created_at" => created_at }
 end.compact.sort_by { |item| [item["position"], item["created_at"]] }
 
@@ -134,6 +134,12 @@ new_images = messages.map do |wrapped|
 end.compact
 
 last_scanned_message = messages.last
+message_backlog_remaining = message_candidates.length - messages.length
+safe_message_scan_end = if message_backlog_remaining.positive?
+  last_scanned_message ? last_scanned_message["created_at"] : last_message_scan_end
+else
+  scan_end
+end
 selected_transcript_end = selected_transcripts.empty? ? last_transcript_time : Time.parse(selected_transcripts.last["end_time"])
 meeting_start_time = parse_time(meeting_start, meeting_start: nil)
 selected_transcript_end_ms = if selected_transcript_end && meeting_start_time
@@ -158,7 +164,7 @@ manifest = {
     "start_time" => (window_start || message_window_start)&.iso8601,
     "cutoff_time" => effective_cutoff&.iso8601,
     "backlog_remaining" => transcripts.length - selected_transcripts.length,
-    "message_backlog_remaining" => message_candidates.length - messages.length
+    "message_backlog_remaining" => message_backlog_remaining
   },
   "new_images" => new_images,
   "unavailable_images" => unavailable_images,
@@ -167,7 +173,7 @@ manifest = {
   "poll" => {
     "last_message_position" => last_scanned_message ? last_scanned_message["position"] : last_position,
     "last_message_time" => last_scanned_message ? last_scanned_message["created_at"].iso8601 : state["last_message_time"],
-    "last_message_scan_end" => scan_end&.iso8601 || state["last_message_scan_end"],
+    "last_message_scan_end" => safe_message_scan_end&.iso8601 || state["last_message_scan_end"],
     "last_transcript_end_time" => selected_transcript_end&.iso8601(3),
     "last_transcript_end_ms" => selected_transcript_end_ms,
     "meeting_event_page_token" => event_page_token
