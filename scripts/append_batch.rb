@@ -79,6 +79,13 @@ def plain_text(node)
   node.children.map { |child| child.is_a?(REXML::Element) ? plain_text(child) : child.to_s }.join.gsub(/\s+/, " ").strip
 end
 
+def nodes_including_self(block, name)
+  nodes = []
+  nodes << block if block.name == name
+  nodes.concat(REXML::XPath.match(block, ".//#{name}"))
+  nodes
+end
+
 def section_heading(document, title)
   xml = REXML::Document.new("<root>#{document.fetch('content')}</root>")
   REXML::XPath.each(xml, "//h1") do |node|
@@ -515,16 +522,17 @@ end
 
 if options[:recover_existing]
   root = xml.root
-  top_level = root.elements.to_a
+  recovery_container = root.elements["fragment"] || root
+  top_level = recovery_container.elements.to_a
   abort "Recovery range does not start at the recorded tail anchor" unless top_level.first&.attributes&.[]("id").to_s == anchor_id
   tail_blocks = top_level.drop(1)
   expected_paragraphs = entries.flat_map do |entry|
     [meeting_stamp(entry), *clean_paragraphs(entry).map { |body| body.gsub(/\[\[|\]\]/, "") }]
   end
-  actual_paragraphs = tail_blocks.flat_map { |block| REXML::XPath.match(block, ".//p") }.map { |node| plain_text(node) }
-  actual_headings = tail_blocks.flat_map { |block| REXML::XPath.match(block, ".//h2") }.map { |node| plain_text(node) }
+  actual_paragraphs = tail_blocks.flat_map { |block| nodes_including_self(block, "p") }.map { |node| plain_text(node) }
+  actual_headings = tail_blocks.flat_map { |block| nodes_including_self(block, "h2") }.map { |node| plain_text(node) }
   expected_headings = opened_chapters.map { |chapter| chapter.fetch("title") }
-  actual_images = tail_blocks.flat_map { |block| REXML::XPath.match(block, ".//img") }
+  actual_images = tail_blocks.flat_map { |block| nodes_including_self(block, "img") }
   expected_image_count = entries.sum { |entry| entry_images(entry).length }
   abort "Recovery transcript structure mismatch" unless actual_paragraphs == expected_paragraphs
   abort "Recovery chapter structure mismatch" unless actual_headings == expected_headings
@@ -532,7 +540,7 @@ if options[:recover_existing]
   last_image_id = actual_images.last&.attributes&.[]("id").to_s
   if expected_image_count.positive?
     last_image_top = actual_images.last
-    last_image_top = last_image_top.parent while last_image_top.parent != root
+    last_image_top = last_image_top.parent while last_image_top.parent != recovery_container
     abort "Recovery batch is not the exact document suffix" unless last_image_id == new_anchor_id && tail_blocks.last == last_image_top
   else
     abort "Recovery batch is not the exact document suffix" unless tail_blocks.last&.attributes&.[]("id").to_s == new_anchor_id
