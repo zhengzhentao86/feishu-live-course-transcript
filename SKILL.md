@@ -74,9 +74,9 @@ v4 把长 processed ID 数组迁移到 `indexes/*.txt`；v5 建立课程级 cano
 ## 普通热路径：每 2 分钟检查，2–6 分钟一个批次
 
 1. 运行 `scripts/collect_incremental.rb --session <state> --output-dir <新run目录>`。脚本并行读取：
-   - 群消息：`last_message_scan_end` 到当前时间的完整 ISO 8601 窄窗口，`--order asc --page-all --no-reactions`；再按 `message_position > last_message_position` 和本地索引过滤。
+   - 群消息：查询起点取 `min(last_message_scan_end, last_message_time)`（缺失时回退到 `meeting_start`），到当前时间使用完整 ISO 8601 窄窗口，`--order asc --page-all --no-reactions`；存在位置游标时以 `message_position > last_message_position` 和本地索引为权威过滤条件，禁止再用扫描时间丢弃位置更新的消息。
    - 会中转写：优先事件 page token，否则只从 `last_transcript_end_time` 到当前时间；禁止从会议开头重拉。
-2. 第一轮从 `course_start` 建立课程群图片全量基线；摄影者为空时接收群内全部图片发送者。后续只下载/OCR 本轮新图；已删除图片写入 `unavailable_image_records`。积压超过 6 分钟时只取最早 6 分钟，下一轮续写。
+2. 第一轮从 `course_start` 建立课程群图片全量基线；摄影者为空时接收群内全部图片发送者。后续只下载/OCR 本轮新图；已删除图片写入 `unavailable_image_records`。积压超过 6 分钟时只取最早 6 分钟，下一轮续写。被本轮字幕窗口截断的较晚图片必须保留为消息积压：只把 `last_message_position/last_message_time` 推进到实际入批的最后一条消息；`last_message_scan_end` 保持单调，但不得作为排除位置更新消息的依据。
 3. 先运行 `scripts/route_model.rb --manifest <manifest>`：`exit` 用 `commit_empty_poll.rb` 提交安全游标；`wait` 表示新图还没有对应字幕，不推进游标、下轮重试；`stop` 保留现场；`rebuild` 进入课程级重建；只有 `run` 才继续模型和云写入。
 4. 运行 `scripts/build_model_context.rb`。模型只允许看到：本批新转写、新图 OCR 标题和发送时间、上一批最后两段、讲师映射、当前 revision、简版质量规则。
 5. 模型只负责轻度精修、明确 ASR 错字、图片与讲解语义对齐、自然分段、主题切换和重点标记。多张连续图片默认分别输出 `kind=image + message_id`，把互不重复的转写句子分给语义最匹配的页面；不要为了凑“一图一段”复制正文。只有语义确实无法可靠拆分时才输出 `kind=image_group + message_ids + alignment_mode=shared_explanation + alignment_reason`，脚本会将其按最多四列并排。禁止把完整群历史、完整文档 XML、processed ID 数组和旧日志放入上下文。
