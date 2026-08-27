@@ -148,6 +148,34 @@ def relative_image_path(path, session_dir)
   [absolute, absolute.delete_prefix(prefix)]
 end
 
+def grid_widths(count)
+  case count
+  when 1 then [["1.0"], 780]
+  when 2 then [["0.5", "0.5"], 360]
+  when 3 then [["0.333333", "0.333333", "0.333334"], 240]
+  when 4 then [["0.25", "0.25", "0.25", "0.25"], 180]
+  else abort "Grid row must contain 1-4 images"
+  end
+end
+
+def image_xml(image, entry, session_dir, allow_missing_images:, width:)
+  absolute, relative = relative_image_path(image.fetch("local_path"), session_dir)
+  unless allow_missing_images
+    abort "Image missing: #{absolute}" unless File.file?(absolute) && File.size(absolute).positive?
+  end
+  sent = image.fetch("sent_at").to_s
+  sent_label = begin
+    Time.iso8601(sent).strftime("%H:%M")
+  rescue ArgumentError
+    sent
+  end
+  title = image["slide_title"].to_s.empty? ? "标题待识别" : image["slide_title"].to_s
+  display_time = entry["course_time"] || entry.fetch("meeting_time")
+  caption = "PPT｜群内发送 #{sent_label}｜课程约 #{display_time}｜#{title}"
+  image_name = "#{image.fetch('position').to_i.to_s.rjust(4, '0')}-#{image.fetch('message_id')}-#{File.basename(absolute)}"
+  %Q(<img path="@./#{CGI.escapeHTML(relative)}" width="#{width}" name="#{CGI.escapeHTML(image_name)}" caption="#{CGI.escapeHTML(caption)}"/>)
+end
+
 def entry_xml(entry, session_dir, allow_missing_images: false)
   abort "Missing speaker" if entry["speaker"].to_s.empty?
   paragraphs = clean_paragraphs(entry)
@@ -158,22 +186,18 @@ def entry_xml(entry, session_dir, allow_missing_images: false)
   ]
   return base.join("\n") if entry_kind(entry) == "text"
 
-  entry_images(entry).each do |image|
-    absolute, relative = relative_image_path(image.fetch("local_path"), session_dir)
-    unless allow_missing_images
-      abort "Image missing: #{absolute}" unless File.file?(absolute) && File.size(absolute).positive?
+  images = entry_images(entry)
+  if entry_kind(entry) == "image"
+    base << image_xml(images.first, entry, session_dir, allow_missing_images: allow_missing_images, width: 780)
+  else
+    images.each_slice(4) do |row|
+      ratios, width = grid_widths(row.length)
+      columns = row.each_with_index.map do |image, index|
+        tag = image_xml(image, entry, session_dir, allow_missing_images: allow_missing_images, width: width)
+        %Q(<column width-ratio="#{ratios[index]}">#{tag}</column>)
+      end
+      base << "<grid>#{columns.join}</grid>"
     end
-    sent = image.fetch("sent_at").to_s
-    sent_label = begin
-      Time.iso8601(sent).strftime("%H:%M")
-    rescue ArgumentError
-      sent
-    end
-    title = image["slide_title"].to_s.empty? ? "标题待识别" : image["slide_title"].to_s
-    display_time = entry["course_time"] || entry.fetch("meeting_time")
-    caption = "PPT｜群内发送 #{sent_label}｜课程约 #{display_time}｜#{title}"
-    image_name = "#{image.fetch('position').to_i.to_s.rjust(4, '0')}-#{image.fetch('message_id')}-#{File.basename(absolute)}"
-    base << %Q(<img path="@./#{CGI.escapeHTML(relative)}" width="780" name="#{CGI.escapeHTML(image_name)}" caption="#{CGI.escapeHTML(caption)}"/>)
   end
   base.join("\n")
 end
@@ -417,7 +441,10 @@ entries.each do |entry|
   index_additions["processed_segment_ids"] << group_id
   state["content_groups"] << {
     "group_id" => group_id,
-    "kind" => kind == "text" ? "text" : "image_group",
+    "kind" => kind,
+    "layout" => entry["layout"] || (kind == "image_group" ? "grid" : kind == "image" ? "single" : nil),
+    "alignment_mode" => entry["alignment_mode"],
+    "alignment_reason" => entry["alignment_reason"],
     "meeting_id" => entry["meeting_id"],
     "meeting_label" => entry["meeting_label"],
     "meeting_time" => entry["meeting_time"],
@@ -452,6 +479,7 @@ entries.each do |entry|
         "image_name" => image_name,
         "local_path" => image["local_path"],
         "content_group_id" => group_id,
+        "layout" => entry["layout"] || (kind == "image_group" ? "grid" : "single"),
         "paragraphs" => body_texts,
         "text" => body_texts.join("\n"),
         "source_text" => entry["source_text"],

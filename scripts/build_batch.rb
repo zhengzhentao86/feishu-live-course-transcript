@@ -90,9 +90,16 @@ entries = Array(decisions["assignments"]).map do |decision|
       image = selected_images.first
       image["slide_title"] = decision["slide_title"] unless decision["slide_title"].to_s.strip.empty?
       base["kind"] = "image"
+      base["layout"] = "single"
       base.merge!(image)
     else
+      abort "Multi-image assignment must use alignment_mode=shared_explanation" unless decision["alignment_mode"] == "shared_explanation"
+      alignment_reason = decision["alignment_reason"].to_s.strip
+      abort "Multi-image assignment requires a concrete alignment_reason" if alignment_reason.empty?
       base["kind"] = "image_group"
+      base["layout"] = "grid"
+      base["alignment_mode"] = "shared_explanation"
+      base["alignment_reason"] = alignment_reason
       base["images"] = selected_images.sort_by { |image| [image["position"].to_i, image["sent_at"].to_s] }
       base["group_id"] = "#{base['meeting_id']}:#{base['course_time_ms']}:#{message_ids.first}"
     end

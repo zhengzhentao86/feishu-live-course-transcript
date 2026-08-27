@@ -37,7 +37,7 @@ ruby scripts/course_preflight.rb --chat-id <chat_id> --course-start <ISO8601> --
 ## 不可变质量与安全基线
 
 1. 默认每堂课新建文档；只有用户明确要求才追加旧文档。
-2. 每个图文组严格对应“讲师课程时间戳 + 1—N 段忠实精修逐字稿 + 1—N 张连续图片”。同一段讲解对应多张 PPT 时正文只出现一次；同页重拍是新消息时仍保留。
+2. 每个图文组严格对应“讲师课程时间戳 + 1—N 段忠实精修逐字稿 + 图片”。连续多图先用 OCR 标题、页面正文、发送顺序和转写句意拆成多个“一段相关讲解 + 一张图”的单图组；不能仅因图片连续发送就合并。只有同页重拍、总览页组，或讲师用一段不可可靠拆分的总括讲解同时说明多图时，才使用一个正文只出现一次的并排 `image_group`，并记录不能拆分的语义原因。
 3. 没有新图片时，也要持续写新增课程逐字稿；两张图之间未配图的讲解写纯文本条目。
 4. 只删口水词、立即自我纠正、逐字重复和无关课堂杂项；保留原顺序、案例、数字、条件、转折、原因、推演、问答和结论，禁止摘要化。
 5. 每个自然段不超过 230 个中文字符；内容多时拆段或拆成连续 1—3 分钟条目，不能删信息。
@@ -79,7 +79,7 @@ v4 把长 processed ID 数组迁移到 `indexes/*.txt`；v5 建立课程级 cano
 2. 第一轮从 `course_start` 建立课程群图片全量基线；摄影者为空时接收群内全部图片发送者。后续只下载/OCR 本轮新图；已删除图片写入 `unavailable_image_records`。积压超过 6 分钟时只取最早 6 分钟，下一轮续写。
 3. 先运行 `scripts/route_model.rb --manifest <manifest>`：`exit` 用 `commit_empty_poll.rb` 提交安全游标；`wait` 表示新图还没有对应字幕，不推进游标、下轮重试；`stop` 保留现场；`rebuild` 进入课程级重建；只有 `run` 才继续模型和云写入。
 4. 运行 `scripts/build_model_context.rb`。模型只允许看到：本批新转写、新图 OCR 标题和发送时间、上一批最后两段、讲师映射、当前 revision、简版质量规则。
-5. 模型只负责轻度精修、明确 ASR 错字、图片与讲解语义对齐、自然分段、主题切换和重点标记。同一段讲解对应多张连续 PPT 时必须输出一个 `image_group + message_ids`，不得复制正文。禁止把完整群历史、完整文档 XML、processed ID 数组和旧日志放入上下文。
+5. 模型只负责轻度精修、明确 ASR 错字、图片与讲解语义对齐、自然分段、主题切换和重点标记。多张连续图片默认分别输出 `kind=image + message_id`，把互不重复的转写句子分给语义最匹配的页面；不要为了凑“一图一段”复制正文。只有语义确实无法可靠拆分时才输出 `kind=image_group + message_ids + alignment_mode=shared_explanation + alignment_reason`，脚本会将其按最多四列并排。禁止把完整群历史、完整文档 XML、processed ID 数组和旧日志放入上下文。
 6. 运行 `scripts/build_batch.rb`，由脚本确定性补齐 source_text、时间换算、segment key、图片资源、覆盖检查和 batch JSON。随后运行 `scripts/validate_fidelity.rb`。
 7. 一个 2–6 分钟批次只运行一次 `scripts/append_batch.rb`：一次 docs update，一次尾部 range fetch。脚本使用连续课程时间；新条目早于已验证尾部时返回 `historical_backfill_requires_rebuild`，严禁追加“补全”章节。
 

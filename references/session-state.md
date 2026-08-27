@@ -71,7 +71,8 @@
 ```json
 {
   "assignments": [
-    {"kind":"image_group","message_ids":["om_x","om_y"],"transcript_ids":["t1"],"speaker":"讲师姓名","slide_titles":["标题1","标题2"],"chapter_title":"主题｜具体内容","paragraphs":["正文含[[重点]]"]},
+    {"kind":"image","message_id":"om_x","transcript_ids":["t1"],"speaker":"讲师姓名","slide_title":"标题1","chapter_title":"主题｜具体内容","paragraphs":["只与该页对应的正文含[[重点]]"]},
+    {"kind":"image_group","message_ids":["om_y","om_z"],"transcript_ids":["t2"],"speaker":"讲师姓名","slide_titles":["标题2","标题3"],"alignment_mode":"shared_explanation","alignment_reason":"讲师用同一段总括讲解同时说明这两张总览页，无法可靠拆句","paragraphs":["共享正文只出现一次"]},
     {"kind":"text","transcript_ids":["t2"],"speaker":"讲师姓名","paragraphs":["正文"]}
   ],
   "ignored_transcripts": [{"transcript_ids":["noise_1"],"reason":"设备调试"}]
@@ -82,6 +83,6 @@
 
 ## batch.json
 
-`build_batch.rb` 根据 manifest 与模型决策确定性生成完整 batch。它必须保证：每个新 transcript 恰好写入或忽略一次；每张新图恰好出现一次；同一 image_group 的正文只出现一次；source_text 来自原转写；图片与时间字段来自 manifest；课程时间来自 `course_start`；忠实度门槛通过。
+`build_batch.rb` 根据 manifest 与模型决策确定性生成完整 batch。它必须保证：每个新 transcript 恰好写入或忽略一次；每张新图恰好出现一次；默认单图单组；多图组必须声明共享讲解和不能拆分的具体原因，正文只出现一次且渲染为栅格；source_text 来自原转写；图片与时间字段来自 manifest；课程时间来自 `course_start`；忠实度门槛通过。
 
 `append_batch.rb` 使用 state revision 一次写入并一次 range fetch。回读成功后先原子保存 `content_groups` 和逐图资源记录，再更新索引。任何新 group 的课程时间早于已验证尾部时必须返回 `historical_backfill_requires_rebuild`，不能继续追加补丁。

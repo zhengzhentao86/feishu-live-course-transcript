@@ -34,7 +34,8 @@ context = {
     image.slice("message_id", "image_key", "message_position", "create_time", "local_path", "ocr_title", "ocr_text")
   end,
   "output_contract" => {
-    "image_group" => "同一段讲解对应多张连续图片时，输出一个 kind=image_group，并用 message_ids 按群消息顺序列出；正文只写一次",
+    "single_image_primary" => "连续多图先依据 OCR 标题、页面正文、发送顺序和转写句意拆分；默认每个 assignment 输出 kind=image + 单个 message_id，并使用互不重复的 transcript_ids",
+    "image_group_fallback" => "仅当同页重拍、不可拆总览或同一段共享讲解无法可靠分配时，才输出 kind=image_group、按消息顺序的 message_ids、alignment_mode=shared_explanation 和具体 alignment_reason；正文只写一次并由脚本并排",
     "chapter_title" => "发生明确课程主题切换时，在该批首个对应 assignment 填简短 chapter_title；延续当前主题时留空",
     "text" => "没有适合图片的新增转写仍输出 kind=text"
   },
@@ -43,7 +44,7 @@ context = {
     "保留原顺序、案例、数字、条件、转折、原因、推演和结论",
     "每个自然段不超过230字；内容多就拆段，禁止摘要",
     "正文/source_text保留率>=80%，正文原文顺序依据>=75%",
-    "一段讲解可对应1-N张连续图片；多图共用一次时间戳和正文，禁止复制正文；未配图转写仍输出纯文本",
+    "优先一段相关讲解配一张图；不能因连续发送就合并，也不能把同一正文复制给多图；确实无法拆分才用带原因的并排 image_group",
     "重点仅用[[...]]标记1-4处，不新增讲师没讲过的内容"
   ],
   "state_summary" => {
