@@ -111,6 +111,7 @@ v4 把长 processed ID 数组迁移到 `indexes/*.txt`；v5 建立课程级 cano
 
 - lark-cli 不可用、未登录、权限、网络或资源失败：说明并停止；不得换浏览器或升级模型。
 - 写入超时：按本批唯一时间戳、图片名和 revision 局部回读；确认未落地才重试，不能重写整批。
+- 写入结果不确定但局部回读证明本批已完整落地时，只允许使用 `append_batch.rb --recover-existing` 提交状态，不得再次上传。恢复不能假设 revision 只增加 1：含图片的单次更新可能触发多次内部 revision；必须要求云端 revision 大于本地记录、本批时间戳/正文/章节/图片数量与顺序精确匹配、并且本批恰好位于旧尾锚点之后。图片名称同时接受请求的逻辑名和飞书归一化后的本地 basename，最终记录云端实际名称；每张图片仍须具有 `token/src/url/href` 资源。
 - revision 漂移、锚点失效、结构异常：停止并保留 batch，不覆盖。
 - 图片块没有 token/src/url/href：不推进状态；只处理缺失项。
 - 历史图片、妙记或续会内容早于工作文档尾部：不追加补丁标题；标记 `requires_document_rebuild`，在收尾阶段由 canonical groups 生成新成品文档。
