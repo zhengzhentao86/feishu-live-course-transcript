@@ -64,9 +64,10 @@ indices = [0, images.length / 2, images.length - 1].uniq
 items = indices.map do |index|
   token = %w[token src url href].map { |key| images[index].attributes[key].to_s }.find { |value| !value.empty? }
   abort "Image #{index + 1} has no resource token" if token.to_s.empty?
-  output = File.join(preview_dir, "#{index + 1}.jpg")
+  relative_output = File.join("validation-previews", "#{index + 1}.jpg")
+  output = File.join(session_dir, relative_output)
   run_cli(
-    "docs", "+media-preview", "--token", token, "--output", output, "--overwrite",
+    "docs", "+media-preview", "--token", token, "--output", relative_output, "--overwrite",
     "--as", "user", "--format", "json", chdir: session_dir
   )
   abort "Preview file missing: #{output}" unless File.file?(output) && File.size(output).positive?
